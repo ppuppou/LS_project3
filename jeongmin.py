@@ -1,4 +1,13 @@
 import pandas as pd
 
-train_df = pd.read_csv('train.csv')
-test_df = pd.read_csv('test.csv')
+train = pd.read_csv('./data/train.csv')
+test = pd.read_csv('./data/test.csv')
+
+train.info()
+train.head()
+
+train.columns
+train = train.drop(columns='id')
+train.columns
+
+len(train['작업유형'].unique())
