@@ -26,10 +26,8 @@ from scipy import stats
 train = pd.read_csv("./data/train.csv")
 test = pd.read_csv("./data/test.csv")
 
-train.to_csv('train_.csv', index = False, encoding = 'utf-8-sig')
-test.to_csv('test_.csv', index = False, encoding = 'utf-8-sig')
-
-
+# train.to_csv('train_.csv', index = False, encoding = 'utf-8-sig')
+# test.to_csv('test_.csv', index = False, encoding = 'utf-8-sig')
 
 
 
