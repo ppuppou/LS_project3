@@ -357,7 +357,75 @@ with st.sidebar:
 # 1. 실시간 전기요금 분석 페이지 (수정됨)
 # ---------------------------------
 if page == "실시간 전기요금 분석":
-    st.title(" 12월 전기요금 실시간 예측 시뮬레이션")
+    # [!!!] 1. (수정) 제목과 로고를 컬럼으로 분리 [!!!]
+    col1, col2 = st.columns([0.8, 0.2]) # 80%는 제목, 20%는 이미지용
+    with col1:
+        st.title(" 12월 전기요금 실시간 예측 시뮬레이션")
+    with col2:
+        st.image("./LSCI.png", use_container_width=True) # 이미지 파일 경로
+    # [!!!] 수정 완료 [!!!]
+    def create_combined_pf_chart(df, x_axis):
+        """실시간 통합 역률 차트를 생성하는 헬퍼 함수"""
+        
+        # 0. 필요한 데이터만 복사
+        pf_data = df[['측정일시', '지상역률_주간클립', '진상역률(%)', '주간여부', '야간여부']].copy()
+        pf_data = pf_data[(pf_data['지상역률_주간클립'] > 0) | (pf_data['진상역률(%)'] > 0)]
+        
+        if pf_data.empty:
+            return None
+
+        # 1. 데이터를 'long' 형태로 변환 (Melt)
+        pf_long = pf_data.melt(
+            id_vars=['측정일시', '주간여부', '야간여부'],
+            value_vars=['지상역률_주간클립', '진상역률(%)'],
+            var_name='역률종류',
+            value_name='역률값'
+        )
+        
+        # 2. '표시유형' 컬럼 생성 (실선/점선 구분용)
+        def get_display_type(row):
+            if row['역률종류'] == '지상역률_주간클립':
+                return '지상 (주간기준)' if row['주간여부'] == 1 else '지상 (야간)'
+            elif row['역률종류'] == '진상역률(%)':
+                return '진상 (야간기준)' if row['야간여부'] == 1 else '진상 (주간)'
+            return '기타'
+            
+        pf_long['표시유형'] = pf_long.apply(get_display_type, axis=1)
+        pf_long['역률종류'] = pf_long['역률종류'].replace({
+            '지상역률_주간클립': '지상역률', '진상역률(%)': '진상역률'
+        })
+
+        # 3. 차트 생성
+        base = alt.Chart(pf_long).mark_line().encode(
+            x=x_axis,
+            y=alt.Y('역률값:Q', title="역률 (%)", scale=alt.Scale(domain=[85, 101])), # y축 85~101%로 고정
+            
+            # 색상 매핑 (지상:주황, 진상:파랑)
+            color=alt.Color('역률종류:N',
+                scale=alt.Scale(domain=['지상역률', '진상역률'], range=['darkorange', 'steelblue']),
+                legend=alt.Legend(title="역률 종류")
+            ),
+            
+            # [핵심] 점선/실선 매핑
+            strokeDash=alt.StrokeDash('표시유형:N',
+                scale=alt.Scale(
+                    domain=['지상 (주간기준)', '지상 (야간)', '진상 (야간기준)', '진상 (주간)'],
+                    range=[[1, 0], [5, 5], [1, 0], [5, 5]] # [실선, 점선, 실선, 점선]
+                ),
+                legend=alt.Legend(title="구분 (기준시간대 실선)")
+            ),
+            order=alt.Order('측정일시:T'),
+            tooltip=[alt.Tooltip('측정일시'), 
+                     '역률종류',
+                     alt.Tooltip('역률값', format=',.2f')]
+        )
+        
+        # 4. 기준선 추가
+        rule90 = alt.Chart(pd.DataFrame({'y': [90]})).mark_rule(color='darkorange', strokeDash=[2,2], opacity=1, strokeWidth=1.5).encode(y='y:Q')
+        rule95 = alt.Chart(pd.DataFrame({'y': [95]})).mark_rule(color='steelblue', strokeDash=[2,2], opacity=1, strokeWidth=1.5).encode(y='y:Q')
+        
+        return (base + rule90 + rule95).properties().interactive()
+    # [!!!] 헬퍼 함수 추가 끝 [!!!]
 
     train_df = load_train_data() # 캐시된 train_df 로드 (PDF 비교용)
     
@@ -393,18 +461,29 @@ if page == "실시간 전기요금 분석":
                 st.session_state.simulation_running = False
 
         # --- 동적 컨텐츠를 위한 Placeholders (유지) ---
-        st.subheader("12월 예측 집계")
-        metric_cols = st.columns(2)
-        total_bill_metric = metric_cols[0].empty()
-        total_usage_metric = metric_cols[1].empty()
+        main_col1, main_col2 = st.columns(2)
 
-        st.subheader("현재 예측")
-        latest_time_placeholder = st.empty()
-        latest_pred_placeholder = st.empty()
-        
+        # 2. 왼쪽 컬럼 (main_col1)에 '12월 예측 집계' 관련 요소들을 배치합니다.
+        with main_col1:
+            st.subheader("12월 예측 집계")
+            metric_cols = st.columns(2) # '12월 예측 집계' 내부의 메트릭 2개
+            total_bill_metric = metric_cols[0].empty()
+            total_usage_metric = metric_cols[1].empty()
+
+        # 3. 오른쪽 컬럼 (main_col2)에 '현재 예측' 관련 요소들을 배치합니다.
+        with main_col2:
+            #  st.subheader("현재 예측")
+            latest_time_placeholder = st.empty()
+            latest_pred_placeholder = st.empty()
+            latest_worktype_placeholder = st.empty()
+
         st.subheader("12월 시간대별 예측 요금 추이")
         chart_placeholder = st.empty()
         
+        # [!!!] 2. (신규) 이 4줄을 여기에 추가합니다 [!!!]
+        st.subheader("실시간 통합 역률 추이")
+        pf_chart_placeholder = st.empty()
+
         if 'simulation_running' not in st.session_state:
             st.session_state.simulation_running = False
 
@@ -422,6 +501,7 @@ if page == "실시간 전기요금 분석":
                 pred_te = row_df["예측요금(원)"].values[0]
                 kwh_pred = row_df["전력사용량(kWh)"].values[0] 
                 current_time = row_df['측정일시'].iloc[0] 
+                current_worktype = row_df['작업유형'].iloc[0]
                 
                 # 상태 업데이트
                 st.session_state.predictions.append(row_df) 
@@ -435,9 +515,10 @@ if page == "실시간 전기요금 분석":
                 
                 # [!!!] 1. (버그 수정) [!!!]
                 # '현재 예측' 섹션 실시간 업데이트
-                latest_time_placeholder.write(f"**측정일시:** {current_time}")
-                latest_pred_placeholder.write(f"**예측요금:** `{pred_te:,.0f} 원` | **예측사용량:** `{kwh_pred:,.2f} kWh`")
-
+                latest_time_placeholder.markdown(f"##### 측정일시: {current_time}")
+                latest_pred_placeholder.markdown(f"##### 예측요금: `{pred_te:,.0f} 원` | 예측사용량: `{kwh_pred:,.2f} kWh`")
+                latest_worktype_placeholder.markdown(f"##### 작업유형: **{current_worktype}**")
+                
                 # Chart Update (유지)
                 results_df = pd.concat(st.session_state.predictions)
             
@@ -454,17 +535,43 @@ if page == "실시간 전기요금 분석":
                                         title='측정일시',
                                         scale=alt.Scale(domain=[start_domain, end_domain])
                                     )
-                
-                    chart = alt.Chart(results_df).mark_line().encode(
-                        x=x_axis, 
+                    
+                    # [!!!] 요청사항 1. 작업유형별 색상 적용 (시뮬레이션 실행 중) [!!!]
+                    color_scale = alt.Scale(domain=['Light_Load', 'Medium_Load', 'Maximum_Load'],
+                                            range=['forestgreen', 'gold', 'firebrick'])
+                    
+                    base = alt.Chart(results_df).encode(x=x_axis)
+                    
+                    # 1. 배경에 깔릴 '영역' 차트 (작업유형별로 색상 지정)
+                    area_chart = base.mark_area(opacity=0.3).encode(
                         y=alt.Y('예측요금(원):Q', title='예측요금 (원)'),
-                        tooltip=['측정일시', alt.Tooltip('예측요금(원)', format=',.0f')]
-                    ).interactive(bind_y=False) 
+                        color=alt.Color('작업유형:N', scale=color_scale, title="작업 유형"),
+                        tooltip=['측정일시', 
+                                 '작업유형', 
+                                 alt.Tooltip('예측요금(원)', format=',.0f')]
+                    )
+                    
+                    # 2. 위에 겹칠 '단일 라인' 차트 (색상 구분 없음)
+                    line_chart = base.mark_line(color='black', point=True, size=1).encode(
+                        y=alt.Y('예측요금(원):Q'),
+                        order=alt.Order('측정일시:T') # [!!!] 라인이 엉키지 않게 순서 지정
+                    )
+                    
+                    # 3. 두 차트 겹치기
+                    chart = (area_chart + line_chart).interactive(bind_y=False) 
+                    # [!!!] 수정 완료 [!!!]
                 
                     chart_placeholder.altair_chart(chart, use_container_width=True)
+
+                    # [!!!] 3. (신규) 이 10줄을 여기에 추가합니다 [!!!]
+                    # 실시간 역률 차트 업데이트
+                    combined_pf_chart = create_combined_pf_chart(results_df, x_axis)
+                    if combined_pf_chart:
+                        pf_chart_placeholder.altair_chart(combined_pf_chart, use_container_width=True)
+                # [!!!] 역률 차트 추가 끝 [!!!]
                 
                 # Loop (속도 조절)
-                time.sleep(1) 
+                time.sleep(0.1) 
                 st.rerun()
 
             else:
@@ -489,8 +596,10 @@ if page == "실시간 전기요금 분석":
                 latest_time = latest_row['측정일시']
                 latest_bill = latest_row['예측요금(원)']
                 latest_kwh = latest_row['전력사용량(kWh)']
-                latest_time_placeholder.write(f"**최종 측정일시:** {latest_time}")
-                latest_pred_placeholder.write(f"**최종 예측요금:** `{latest_bill:,.0f} 원` | **최종 예측사용량:** `{latest_kwh:,.2f} kWh`")
+                latest_worktype = latest_row['작업유형'] # <-- 이 라인을 추가합니다.
+                latest_time_placeholder.markdown(f"##### 최종 측정일시: {latest_time}")
+                latest_pred_placeholder.markdown(f"##### 최종 예측요금: `{latest_bill:,.0f} 원` | 최종 예측사용량: `{latest_kwh:,.2f} kWh`")
+                latest_worktype_placeholder.markdown(f"##### 최종 작업유형: **{latest_worktype}**")
                 
                 # --- PDF 다운로드 버튼 로직 ---
                 usage_by_band = results_df.groupby('부하구분')['전력사용량(kWh)'].sum()
@@ -502,13 +611,13 @@ if page == "실시간 전기요금 분석":
                 peak_demand_kw = results_df['요금적용전력_kW'].max()
                 peak_demand_time = pd.NaT 
                 if not pd.isna(peak_demand_kw):
-                     peak_demand_time = results_df.loc[results_df['요금적용전력_kW'].idxmax()]['측정일시']
+                       peak_demand_time = results_df.loc[results_df['요금적용전력_kW'].idxmax()]['측정일시']
                 
                 # [!!!] 2. (최저 수요전력 추가) [!!!]
                 min_demand_kw = results_df['요금적용전력_kW'].min()
                 min_demand_time = pd.NaT
                 if not pd.isna(min_demand_kw):
-                     min_demand_time = results_df.loc[results_df['요금적용전력_kW'].idxmin()]['측정일시']
+                       min_demand_time = results_df.loc[results_df['요금적용전력_kW'].idxmin()]['측정일시']
 
                 # 2. 역률 (Power Factor) 지표
                 daytime_df = results_df[results_df['주간여부'] == 1]
@@ -548,7 +657,7 @@ if page == "실시간 전기요금 분석":
                     "penalty_night_hours": penalty_night_hours,
                     
                     "yesterday_str": yesterday_str, # 3번
-                    "today_str": today_str        # 3번
+                    "today_str": today_str      # 3번
                 }
                 
                 # 비교 테이블 데이터 생성
@@ -581,14 +690,40 @@ if page == "실시간 전기요금 분석":
                                     scale=alt.Scale(domain=[start_domain, end_domain])
                                 )
                 
-                chart = alt.Chart(results_df).mark_line().encode(
-                    x=x_axis, 
+                # [!!!] 요청사항 1. 작업유형별 색상 적용 (시뮬레이션 중지/완료 시) [!!!]
+                color_scale = alt.Scale(domain=['Light_Load', 'Medium_Load', 'Maximum_Load'],
+                                        range=['forestgreen', 'gold', 'firebrick'])
+                                        
+                base = alt.Chart(results_df).encode(x=x_axis)
+                
+                # 1. 배경에 깔릴 '영역' 차트 (작업유형별로 색상 지정)
+                area_chart = base.mark_area(opacity=0.3).encode(
                     y=alt.Y('예측요금(원):Q', title='예측요금 (원)'),
-                    tooltip=['측정일시', alt.Tooltip('예측요금(원)', format=',.0f')]
-                ).interactive(bind_y=False) 
+                    color=alt.Color('작업유형:N', scale=color_scale, title="작업 유형"),
+                    tooltip=['측정일시', 
+                             '작업유형', 
+                             alt.Tooltip('예측요금(원)', format=',.0f')]
+                )
+                
+                # 2. 위에 겹칠 '단일 라인' 차트 (색상 구분 없음)
+                line_chart = base.mark_line(color='black', point=True, size=1).encode(
+                    y=alt.Y('예측요금(원):Q'),
+                    order=alt.Order('측정일시:T') # [!!!] 라인이 엉키지 않게 순서 지정
+                )
+                
+                # 3. 두 차트 겹치기
+                chart = (area_chart + line_chart).interactive(bind_y=False)
+                # [!!!] 수정 완료 [!!!]
                 
                 chart_placeholder.altair_chart(chart, use_container_width=True)
-            
+
+                # [!!!] 4. (신규) 이 10줄을 여기에 추가합니다 [!!!]
+                # 중지/완료 시 역률 차트 표시
+                combined_pf_chart = create_combined_pf_chart(results_df, x_axis)
+                if combined_pf_chart:
+                    pf_chart_placeholder.altair_chart(combined_pf_chart, use_container_width=True)
+                # [!!!] 역률 차트 추가 끝 [!!!]
+
                 # 상세 데이터 expander
                 with st.expander("12월 예측 상세 데이터 보기 (최종)"):
                     display_cols = ["측정일시", "작업유형", "전력사용량(kWh)", "예측요금(원)"]
@@ -610,8 +745,14 @@ if page == "실시간 전기요금 분석":
 # 2. 과거 전력사용량 분석 페이지 (수정 없음)
 # ---------------------------------
 elif page == "과거 전력사용량 분석":
-    # --- (이 페이지의 코드는 이전과 동일합니다) ---
-    st.title("과거 전력사용량 분석 (1월 ~ 11월)")
+
+    # [!!!] 2. (수정) 제목과 로고를 컬럼으로 분리 [!!!]
+    col1, col2 = st.columns([0.8, 0.2]) # 80%는 제목, 20%는 이미지용
+    with col1:
+        st.title("과거 전력사용량 분석 (1월 ~ 11월)")
+    with col2:
+        st.image("./LSCI.png", use_container_width =True) # 이미지 파일 경로
+    # [!!!] 수정 완료 [!!!]
 
     @st.cache_data 
     def load_data(filepath="./data/train_.csv"):
@@ -837,9 +978,9 @@ elif page == "과거 전력사용량 분석":
                     total_lagging_obs = len(lagging_data_selected)
                     percent_below = (below_90 / total_lagging_obs) * 100 if total_lagging_obs > 0 else 0
                     st.metric(label="90% 미만 측정 비율 (패널티 구간)", value=f"{percent_below:.1f} %",
-                                help=f"{analysis_title} 기간(09-23시) 중 {below_90} / {total_lagging_obs} 회")
+                             help=f"{analysis_title} 기간(09-23시) 중 {below_90} / {total_lagging_obs} 회")
                 else:
-                    st.metric(label="90% 미만 측정 비율 (패널티 구간)", value="N/A", help=f"{analysis_title} 기간(09-23시) 데이터 없음")
+                    st.metric(label="90% 미만 측정 비율 (패널티 구간)", value="N/A", help=f"{analysis_title} 기간(09-2L3시) 데이터 없음")
             else:
                 st.info("전체 기간(09-23시)에 유효한 지상역률 데이터가 없습니다.")
 
@@ -861,7 +1002,7 @@ elif page == "과거 전력사용량 분석":
                     total_leading_obs = len(leading_data_selected)
                     percent_below = (below_95 / total_leading_obs) * 100 if total_leading_obs > 0 else 0
                     st.metric(label="95% 미만 측정 비율 (패널티 구간)", value=f"{percent_below:.1f} %",
-                                help=f"{analysis_title} 기간(23-09시) 중 {below_95} / {total_leading_obs} 회")
+                             help=f"{analysis_title} 기간(23-09시) 중 {below_95} / {total_leading_obs} 회")
                 else:
                     st.metric(label="95% 미만 측정 비율 (패널티 구간)", value="N/A", help=f"{analysis_title} 기간(23-09시) 데이터 없음")
             else:
