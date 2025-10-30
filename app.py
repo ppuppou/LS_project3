@@ -140,7 +140,7 @@ if page == "실시간 전기요금 분석":
                     st.session_state.simulation_running = True
                 
                 # 'current_index'가 0이거나 없으면 (즉, 처음 시작이면) '초기화 후 시작'
-                else: 
+                else:
                     try:
                         # 3. 데이터 로드 (train.csv는 Lag 생성용, test.csv는 예측 대상용)
                         train_df = pd.read_csv("./data/train.csv")
@@ -275,37 +275,37 @@ if page == "실시간 전기요금 분석":
             
                 if not results_df.empty:
                 
-                # [수정] 24시간 윈도우 로직 (최종)
+                    # [수정] 24시간 윈도우 로직 (최종)
                     first_time = results_df['측정일시'].iloc[0]
                     latest_time = results_df['측정일시'].iloc[-1]
                 
-                # 24시간이 경과했는지 확인
-                if latest_time < (first_time + pd.Timedelta(hours=24)):
-                    # [Phase 1] 24시간 미만: 
-                    # X축을 고정하지 않고, 데이터에 맞게 자동 스케일링 (전체 화면 채우기)
-                    x_axis = alt.X('측정일시:T', title='측정일시')
-                else:
-                    # [Phase 2] 24시간 초과:
-                    # X축이 최신 시간을 따라 24시간 윈도우로 슬라이딩
-                    start_domain = latest_time - pd.Timedelta(hours=24)
-                    end_domain = latest_time
-                    x_axis = alt.X('측정일시:T', 
-                                   title='측정일시',
-                                   scale=alt.Scale(domain=[start_domain, end_domain])
-                                  )
+                    # 24시간이 경과했는지 확인
+                    if latest_time < (first_time + pd.Timedelta(hours=24)):
+                        # [Phase 1] 24시간 미만:
+                        # X축을 고정하지 않고, 데이터에 맞게 자동 스케일링 (전체 화면 채우기)
+                        x_axis = alt.X('측정일시:T', title='측정일시')
+                    else:
+                        # [Phase 2] 24시간 초과:
+                        # X축이 최신 시간을 따라 24시간 윈도우로 슬라이딩
+                        start_domain = latest_time - pd.Timedelta(hours=24)
+                        end_domain = latest_time
+                        x_axis = alt.X('측정일시:T',
+                                        title='측정일시',
+                                        scale=alt.Scale(domain=[start_domain, end_domain])
+                                    )
                 
-                chart = alt.Chart(results_df).mark_line().encode(
-                    x=x_axis, # [수정] 동적 X축 할당
-                    y=alt.Y('예측요금(원):Q', title='예측요금 (원)'),
-                    tooltip=['측정일시', alt.Tooltip('예측요금(원)', format=',.0f')]
-                ).interactive(bind_y=False) # Y축 줌 방지
+                    chart = alt.Chart(results_df).mark_line().encode(
+                        x=x_axis, # [수정] 동적 X축 할당
+                        y=alt.Y('예측요금(원):Q', title='예측요금 (원)'),
+                        tooltip=['측정일시', alt.Tooltip('예측요금(원)', format=',.0f')]
+                    ).interactive(bind_y=False) # Y축 줌 방지
                 
-                chart_placeholder.altair_chart(chart, use_container_width=True)
+                    chart_placeholder.altair_chart(chart, use_container_width=True)
                 
                 # [수정] 2-11.5 SHAP Plot Update (제거)
                 
                 # 2-12. Loop (1.5초 대기 후 rerun)
-                time.sleep(1.5) 
+                time.sleep(1.5)
                 st.rerun()
 
             else:
@@ -333,7 +333,7 @@ if page == "실시간 전기요금 분석":
 
                 # 24시간이 경과했는지 확인
                 if latest_time < (first_time + pd.Timedelta(hours=24)):
-                    # [Phase 1] 24시간 미만: 
+                    # [Phase 1] 24시간 미만:
                     # X축을 0~24시간으로 고정
                     start_domain = first_time
                     end_domain = first_time + pd.Timedelta(hours=24)
@@ -343,42 +343,42 @@ if page == "실시간 전기요금 분석":
                     start_domain = latest_time - pd.Timedelta(hours=24)
                     end_domain = latest_time
                 
-            first_time = results_df['측정일시'].iloc[0]
-            latest_time = results_df['측정일시'].iloc[-1]
+                first_time = results_df['측정일시'].iloc[0]
+                latest_time = results_df['측정일시'].iloc[-1]
 
-            # 24시간이 경과했는지 확인
-            if latest_time < (first_time + pd.Timedelta(hours=24)):
-                # [Phase 1] 24시간 미만: 
-                # [수정] scale을 고정하지 않고, '실행 중'일 때와 동일하게 자동 스케일링
-                x_axis = alt.X('측정일시:T', title='측정일시')
-            else:
-                # [Phase 2] 24시간 초과:
-                # X축이 최신 시간을 따라 24시간 윈도우로 슬라이딩
-                start_domain = latest_time - pd.Timedelta(hours=24)
-                end_domain = latest_time
-                x_axis = alt.X('측정일시:T', 
-                               title='측정일시',
-                               scale=alt.Scale(domain=[start_domain, end_domain])
-                              )
+                # 24시간이 경과했는지 확인
+                if latest_time < (first_time + pd.Timedelta(hours=24)):
+                    # [Phase 1] 24시간 미만:
+                    # [수정] scale을 고정하지 않고, '실행 중'일 때와 동일하게 자동 스케일링
+                    x_axis = alt.X('측정일시:T', title='측정일시')
+                else:
+                    # [Phase 2] 24시간 초과:
+                    # X축이 최신 시간을 따라 24시간 윈도우로 슬라이딩
+                    start_domain = latest_time - pd.Timedelta(hours=24)
+                    end_domain = latest_time
+                    x_axis = alt.X('측정일시:T',
+                                    title='측정일시',
+                                    scale=alt.Scale(domain=[start_domain, end_domain])
+                                )
+                
+                # [수정] 차트 생성 로직을 밖으로 빼고 x_axis 변수 사용
+                chart = alt.Chart(results_df).mark_line().encode(
+                    x=x_axis, # [수정] 위에서 정의된 x_axis 변수 사용
+                    y=alt.Y('예측요금(원):Q', title='예측요금 (원)'),
+                    tooltip=['측정일시', alt.Tooltip('예측요금(원)', format=',.0f')]
+                ).interactive(bind_y=False) # Y축 줌 방지
+                
+                chart_placeholder.altair_chart(chart, use_container_width=True)
             
-            # [수정] 차트 생성 로직을 밖으로 빼고 x_axis 변수 사용
-            chart = alt.Chart(results_df).mark_line().encode(
-                x=x_axis, # [수정] 위에서 정의된 x_axis 변수 사용
-                y=alt.Y('예측요금(원):Q', title='예측요금 (원)'),
-                tooltip=['측정일시', alt.Tooltip('예측요금(원)', format=',.0f')]
-            ).interactive(bind_y=False) # Y축 줌 방지
-            
-            chart_placeholder.altair_chart(chart, use_container_width=True)
-        
-            # 상세 데이터 expander (이 부분은 동일)
-            with st.expander("12월 예측 상세 데이터 보기 (최종)"):
-                st.dataframe(results_df[[ # 여기는 전체 df 표시
-                    "측정일시", "작업유형", "전력사용량(kWh)", "유효역률(%)", "예측요금(원)"
-                ]].style.format({
-                "전력사용량(kWh)": "{:,.2f}",
-                "유효역률(%)": "{:,.2f}",
-                "예측요금(원)": "{:,.0f}"
-                }))
+                # 상세 데이터 expander (이 부분은 동일)
+                with st.expander("12월 예측 상세 데이터 보기 (최종)"):
+                    st.dataframe(results_df[[ # 여기는 전체 df 표시
+                        "측정일시", "작업유형", "전력사용량(kWh)", "유효역률(%)", "예측요금(원)"
+                    ]].style.format({
+                    "전력사용량(kWh)": "{:,.2f}",
+                    "유효역률(%)": "{:,.2f}",
+                    "예측요금(원)": "{:,.0f}"
+                    }))
         else:
             # 시뮬레이션 시작 전 (초기 상태)
             total_bill_metric.metric("12월 누적 예상 전기요금", "0 원")
@@ -454,18 +454,18 @@ elif page == "과거 전력사용량 분석":
                 analysis_title = f"{selected_month}월"
                 # ... (delta 계산 로직은 기존과 동일) ...
                 if selected_month > 1:
-                     prev_month_summary = monthly_summary[monthly_summary['월'] == (selected_month - 1)]
-                     if not prev_month_summary.empty:
-                            current_val_usage = monthly_summary[monthly_summary['월'] == selected_month]['total_usage'].values[0]
-                            prev_val_usage = prev_month_summary['total_usage'].values[0]
-                            delta_usage = int(current_val_usage - prev_val_usage)
-                            current_val_bill = monthly_summary[monthly_summary['월'] == selected_month]['total_bill'].values[0]
-                            prev_val_bill = prev_month_summary['total_bill'].values[0]
-                            delta_bill = int(current_val_bill - prev_val_bill)
-                            delta_usage_str = f"{delta_usage:+,} kWh"
-                            delta_usage_color = "inverse"
-                            delta_bill_str = f"{delta_bill:+,} 원"
-                            delta_bill_color = "inverse"
+                        prev_month_summary = monthly_summary[monthly_summary['월'] == (selected_month - 1)]
+                        if not prev_month_summary.empty:
+                                current_val_usage = monthly_summary[monthly_summary['월'] == selected_month]['total_usage'].values[0]
+                                prev_val_usage = prev_month_summary['total_usage'].values[0]
+                                delta_usage = int(current_val_usage - prev_val_usage)
+                                current_val_bill = monthly_summary[monthly_summary['월'] == selected_month]['total_bill'].values[0]
+                                prev_val_bill = prev_month_summary['total_bill'].values[0]
+                                delta_bill = int(current_val_bill - prev_val_bill)
+                                delta_usage_str = f"{delta_usage:+,} kWh"
+                                delta_usage_color = "inverse"
+                                delta_bill_str = f"{delta_bill:+,} 원"
+                                delta_bill_color = "inverse"
 
             elif filter_type == "기간별 선택":
                 selected_range = st.date_input("분석할 기간을 선택하세요:", [min_date, max_date], min_value=min_date, max_value=max_date)
@@ -512,37 +512,65 @@ elif page == "과거 전력사용량 분석":
             selected_end_dt = analysis_df['측정일시'].max()
             # 기간별 선택 시 종료일 다음날 0시까지 포함하도록 조정 (선택한 날짜 전체 포함)
             if filter_type == "기간별 선택" and isinstance(selected_range, (list, tuple)) and len(selected_range) == 2:
-                 selected_end_dt = pd.Timestamp(selected_range[1] + pd.Timedelta(days=1)) - pd.Timedelta(seconds=1) # 종료일 23:59:59까지
+                # [수정] 종료일을 선택한 날짜의 23:59:59로 설정
+                selected_end_dt = pd.Timestamp(selected_range[1] + pd.Timedelta(days=1)) - pd.Timedelta(seconds=1) 
+                # [수정] 시작일을 선택한 날짜의 00:00:00으로 설정
+                selected_start_dt = pd.Timestamp(selected_range[0])
 
         else: # analysis_df가 비어있거나 초기 상태일 경우 전체 기간으로 설정
             selected_start_dt = df['측정일시'].min()
             selected_end_dt = df['측정일시'].max()
             analysis_title = "전체 기간" # 제목 업데이트
             if not (filter_type == "월별 선택" or (filter_type == "기간별 선택" and isinstance(selected_range, (list, tuple)) and len(selected_range) == 2)):
-                 st.info("기간을 선택하면 해당 구간을 확대하여 보여줍니다. (현재 전체 기간 표시 중)")
+                st.info("기간을 선택하면 해당 구간을 확대하여 보여줍니다. (현재 전체 기간 표시 중)")
 
 
         # --- [신규] 차트 생성 함수 정의 ---
+        
+        # [!!!!] <<<--- 여기가 수정된 함수입니다 [!!!!]
         def create_daily_chart(full_df, start_dt, end_dt):
+            # 1. 전체 기간(full_df)을 기준으로 일별 집계
             daily_summary = full_df.groupby('날짜').agg(
                 total_usage=('전력사용량(kWh)', 'sum'),
                 total_bill=('전기요금(원)', 'sum')
             ).reset_index()
+            
+            # 2. [중요] '날짜'(date) 컬럼을 'Timestamp'(datetime)로 변환
+            #    그래야 'start_dt', 'end_dt' (Timestamp)와 타입이 일치합니다.
+            daily_summary['날짜'] = pd.to_datetime(daily_summary['날짜'])
+
+            # 3. Altair가 이중축을 그릴 수 있도록 데이터 포맷 변경 (Melt)
             daily_summary_melted = daily_summary.melt(
                 var_name='범주', value_name='값', id_vars=['날짜'], value_vars=['total_usage', 'total_bill']
             )
             daily_summary_melted['범주'] = daily_summary_melted['범주'].map({
                 'total_usage': '총 사용량 (kWh)', 'total_bill': '총 전기요금 (원)'
             })
+            
+            # 4. 기본 차트 정의 (데이터는 1~11월 전체)
             base = alt.Chart(daily_summary_melted).encode(
-                x=alt.X('날짜:T', axis=alt.Axis(title='날짜', format='%Y-%m-%d'),
-                        scale=alt.Scale(domain=[start_dt.date(), end_dt.date()])), # 날짜 부분만 사용
+                # 5. [중요] X축의 'scale'에 'domain'을 지정하여 
+                #    선택된 기간(start_dt, end_dt)을 "초기 뷰"로 설정
+                x=alt.X('날짜:T', 
+                        axis=alt.Axis(title='날짜', format='%Y-%m-%d'),
+                        scale=alt.Scale(domain=[start_dt, end_dt])), # <--- 이 부분이 창(Window) 역할
                 color=alt.Color('범주:N', legend=alt.Legend(title=None, orient='top-left', fillColor='white', padding=5)),
-                tooltip=['날짜', '범주', alt.Tooltip('값', title='값', format=',.0f')] # Format 변경
-            ).interactive(bind_y=False) # interactive(bind_y=False) 대신 사용 (Y축 줌 허용)
-            usage_line = base.transform_filter(alt.datum.범주 == '총 사용량 (kWh)').mark_line(point=True).encode(y=alt.Y('값:Q', title='총 사용량 (kWh)'))
-            bill_line = base.transform_filter(alt.datum.범주 == '총 전기요금 (원)').mark_line(point=True).encode(y=alt.Y('값:Q', title='총 전기요금 (원)'))
-            return alt.layer(usage_line, bill_line).resolve_scale(y='independent')
+                tooltip=['날짜', '범주', alt.Tooltip('값', title='값', format=',.0f')]
+            )
+            
+            # 6. 이중 축을 위한 두 개의 라인 생성
+            usage_line = base.mark_line(point=alt.MarkConfig(opacity=0.3, size=10)).encode(
+                y=alt.Y('값:Q', title='총 사용량 (kWh)')
+            ).transform_filter(alt.datum.범주 == '총 사용량 (kWh)')
+            
+            bill_line = base.mark_line(point=alt.MarkConfig(opacity=0.3, size=10), color='darkorange').encode(
+                y=alt.Y('값:Q', title='총 전기요금 (원)')
+            ).transform_filter(alt.datum.범주 == '총 전기요금 (원)')
+            
+            # 7. 차트 합치기, Y축 분리, X축만 interactive하게 설정
+            return alt.layer(usage_line, bill_line).resolve_scale(
+                y='independent'
+            ).interactive(bind_y=False) # X축 줌/패닝 활성화
 
         def create_hourly_comparison_chart(full_df, analysis_df_for_avg, title_for_avg):
             overall_hourly_avg = full_df.groupby('시간')['전력사용량(kWh)'].mean().reset_index()
@@ -594,6 +622,7 @@ elif page == "과거 전력사용량 분석":
         col1_viz, col2_viz = st.columns(2)
         with col1_viz:
             st.write(f"**일별 사용량 및 요금** (초기 표시: {analysis_title})")
+            # [중요] full_df(df)와 선택된 날짜 범위(selected_start_dt, selected_end_dt) 전달
             daily_chart = create_daily_chart(df, selected_start_dt, selected_end_dt)
             st.altair_chart(daily_chart, use_container_width=True)
         with col2_viz:
@@ -626,7 +655,7 @@ elif page == "과거 전력사용량 분석":
                     total_lagging_obs = len(lagging_data_selected)
                     percent_below = (below_90 / total_lagging_obs) * 100 if total_lagging_obs > 0 else 0
                     st.metric(label="90% 미만 측정 비율 (패널티 구간)", value=f"{percent_below:.1f} %",
-                              help=f"{analysis_title} 기간(09-23시) 중 {below_90} / {total_lagging_obs} 회")
+                                help=f"{analysis_title} 기간(09-23시) 중 {below_90} / {total_lagging_obs} 회")
                 else:
                     st.metric(label="90% 미만 측정 비율 (패널티 구간)", value="N/A", help=f"{analysis_title} 기간(09-23시) 데이터 없음")
             else:
@@ -651,7 +680,7 @@ elif page == "과거 전력사용량 분석":
                     total_leading_obs = len(leading_data_selected)
                     percent_below = (below_95 / total_leading_obs) * 100 if total_leading_obs > 0 else 0
                     st.metric(label="95% 미만 측정 비율 (패널티 구간)", value=f"{percent_below:.1f} %",
-                              help=f"{analysis_title} 기간(23-09시) 중 {below_95} / {total_leading_obs} 회")
+                                help=f"{analysis_title} 기간(23-09시) 중 {below_95} / {total_leading_obs} 회")
                 else:
                     st.metric(label="95% 미만 측정 비율 (패널티 구간)", value="N/A", help=f"{analysis_title} 기간(23-09시) 데이터 없음")
             else:
@@ -661,7 +690,6 @@ elif page == "과거 전력사용량 분석":
 
         # --- 전체 기간 월별 트렌드 (기존과 동일) ---
         st.write("#### 전체 기간 월별 트렌드 (1~11월)")
-        # ... (기존 월별 트렌드 차트 코드 - base_monthly, usage_line_monthly, bill_line_monthly, dual_axis_chart) ...
         # (이 부분은 월별 비교이므로 X축 도메인 설정 불필요)
         chart_data = monthly_summary # .reset_index() 불필요
         monthly_summary_melted = chart_data.melt(
@@ -669,18 +697,18 @@ elif page == "과거 전력사용량 분석":
             value_name='값',
             id_vars=['월'],
             value_vars=['total_usage', 'total_bill'] # <-- 이 인수들을 다시 추가
-        ) 
+        )
         monthly_summary_melted['범주'] = monthly_summary_melted['범주'].map({
             'total_usage': '총 사용량 (kWh)',
             'total_bill': '총 전기요금 (원)'
-        }) 
+        })
         base_monthly = alt.Chart(monthly_summary_melted).encode(
             x=alt.X('월:O', axis=alt.Axis(title='월', labelAngle=0, labelExpr="datum.value + '월'")),
             color=alt.Color('범주:N', legend=alt.Legend(title=None, orient='top-right', fillColor='white', padding=5)),
             tooltip=['월', '범주', alt.Tooltip('값', title='값', format=',.0f')]
         ).interactive(bind_y=False) # bind_y=False 제거
         usage_line_monthly = base_monthly.transform_filter(alt.datum.범주 == '총 사용량 (kWh)').mark_line(point=True).encode(y=alt.Y('값:Q', title='총 사용량 (kWh)'))
-        bill_line_monthly = base_monthly.transform_filter(alt.datum.범주 == '총 전기요금 (원)').mark_line(point=True).encode(y=alt.Y('값:Q', title='총 전기요금 (원)'))
+        bill_line_monthly = base_monthly.transform_filter(alt.datum.범주 == '총 전기요금 (원)').mark_line(point=True).encode(y=alt.Y('값:Q', title='총 전기요G (원)'))
         dual_axis_chart = alt.layer(usage_line_monthly, bill_line_monthly).resolve_scale(y='independent')
         st.altair_chart(dual_axis_chart, use_container_width=True)
 
