@@ -12,6 +12,57 @@ from fpdf import FPDF
 from datetime import datetime
 import io 
 
+# [!!!] 1. (신규) 스크립트 상단에 챗봇 함수 추가 [!!!]
+# [!!!] 1. (수정) 챗봇 함수 수정 [!!!]
+@st.dialog("🤖 챗봇")
+def show_chatbot():
+    """st.dialog를 사용하여 모달 챗봇 UI를 표시합니다."""
+    
+    # 1. 챗봇 기록 초기화 (session_state 사용)
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = [{"role": "assistant", "content": "안녕하세요! 대시보드 관련 질문에 답변해 드립니다."}]
+
+    # 2. 기존 메시지 표시 (이미지 렌더링 포함)
+    for msg in st.session_state.chat_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            # [!!!] 챗봇 응답에 이미지가 포함된 경우 함께 표시 [!!!]
+            if msg["role"] == "assistant" and "image" in msg:
+                st.image(msg["image"])
+
+    # 3. 사용자 입력 받기
+    if prompt := st.chat_input("메시지를 입력하세요..."):
+        # 사용자 메시지 추가 및 표시
+        st.session_state.chat_messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        # 4. 봇 응답 생성 (수정됨: 예비군 고정 응답)
+        # [!!!] 어떤 질문이든 이 응답으로 고정 [!!!]
+        response_content = "지금은 담당자가 예비군에 참석하여 답변이 어렵습니다. 🫡"
+        # (원하는 이미지 URL로 변경 가능)
+        image_url = "./army.JPG" 
+        
+        # 봇 응답 추가 (내용 + 이미지 URL)
+        st.session_state.chat_messages.append({
+            "role": "assistant", 
+            "content": response_content,
+            "image": image_url  # [!!!] 이미지 URL을 세션에 함께 저장 [!!!]
+        })
+        
+        # 봇 응답 즉시 표시 (라이브)
+        with st.chat_message("assistant"):
+            st.markdown(response_content)
+            st.image(image_url) # [!!!] 생성 시점에도 이미지 표시 [!!!]
+        
+    # [!!!] 5. (삭제) st.rerun() 삭제 (기존과 동일)
+    
+    # [!!!] 6. (신규) 챗봇 닫기 버튼 추가 (기존과 동일)
+    st.divider()
+    if st.button("닫기", use_container_width=True):
+        st.session_state.show_chat = False
+        st.rerun()
+
 # -----------------------------
 # [삭제] 예측 모델/함수 섹션
 # (모두 삭제됨)
@@ -137,7 +188,7 @@ def generate_bill_pdf(report_data, comparison_df=None):
         pdf.cell(col_width, 8, f"청구서 발행일: {report_data['report_date'].strftime('%Y-%m-%d')}", border=0, ln=1)
         start_str = report_data['period_start'].strftime('%Y-%m-%d %H:%M')
         end_str = report_data['period_end'].strftime('%Y-%m-%d %H:%M')
-        pdf.multi_cell(0, 6, f"예측 기간: {start_str} ~ {end_str}", border=0, ln=1)
+        pdf.multi_cell(0, 6, f"예측 기간: {start_str} ~ {end_str}", border=0, align='L')
         pdf.ln(3) 
 
         pdf.set_fill_color(240, 240, 240) 
@@ -339,6 +390,19 @@ st.set_page_config(
     page_title="전기요금 분석", layout="wide", 
 )
 
+# [!!!] 2. (신규) 챗봇 실행 로직 추가 [!!!]
+# (st.set_page_config 바로 뒤, st.sidebar 앞에 위치해야 함)
+
+# st.session_state에 "show_chat" 플래그가 True이면 챗봇을 실행
+if st.session_state.get("show_chat", False):
+    
+    # 챗봇을 열기 전, 만약 시뮬레이션이 실행 중이었다면 '일시정지' 상태로 변경
+    if st.session_state.get("simulation_running", False):
+        st.session_state.simulation_running = False 
+        
+    # 챗봇 함수 호출
+    show_chatbot()
+
 # ---------------------------------
 # 사이드바 (메뉴) (유지)
 # ---------------------------------
@@ -352,6 +416,13 @@ with st.sidebar:
     )
     
     st.divider() 
+    
+    # [!!!] 3. (수정) 챗봇 버튼이 플래그를 설정하도록 변경 [!!!]
+    if st.button("🤖 챗봇과 대화하기", use_container_width=True):
+        # 함수를 직접 호출하는 대신, 세션 상태 플래그를 True로 설정
+        st.session_state.show_chat = True
+        # 즉시 재실행하여 2번 로직이 챗봇을 띄우도록 함
+        st.rerun()
 
 # ---------------------------------
 # 1. 실시간 전기요금 분석 페이지 (수정됨)
@@ -363,6 +434,58 @@ if page == "실시간 전기요금 분석":
         st.title(" 12월 전기요금 실시간 예측 시뮬레이션")
     with col2:
         st.image("./LSCI.png", use_container_width=True) # 이미지 파일 경로
+
+    def add_work_type_segment_group(df):
+        """'작업유형'이 변경될 때마다 고유 그룹 ID를 추가하고,
+        연결을 위해 "브릿지" 포인트를 삽입합니다."""
+
+        if df.empty or len(df) < 2:
+            if 'segment_group' not in df.columns:
+                df = df.assign(segment_group=1)
+            return df
+
+        # 1. 측정일시 순으로 정렬 (필수)
+        df_sorted = df.sort_values(by='측정일시').reset_index(drop=True)
+
+        # 2. '작업유형'이 이전 행과 다른 지점(인덱스) 찾기
+        work_type_changed = (df_sorted['작업유형'] != df_sorted['작업유형'].shift(1))
+
+        # 3. 'segment_group' (세그먼트 ID) 생성
+        df_sorted['segment_group'] = work_type_changed.cumsum()
+
+        # 4. "브릿지" 행(데이터) 생성
+        bridge_rows = []
+
+        # work_type_changed가 True인 지점(새 세그먼트의 시작)을 순회
+        # (인덱스 0은 제외)
+        for idx in df_sorted[work_type_changed].index:
+            if idx == 0: 
+                continue 
+
+            # [핵심] 이전 행(세그먼트의 마지막 점)을 복사
+            prev_row = df_sorted.iloc[idx - 1].copy()
+
+            # [핵심] 현재 행(새 세그먼트)의 '작업유형'과 'segment_group'을 덮어씀
+            # (시간과 값은 이전 행의 것을 그대로 사용)
+            prev_row['작업유형'] = df_sorted.iloc[idx]['작업유형']
+            prev_row['segment_group'] = df_sorted.iloc[idx]['segment_group']
+
+            bridge_rows.append(prev_row)
+
+        if not bridge_rows:
+            # 변경점이 없으면 정렬된 df 반환
+            return df_sorted
+
+        # 5. 원본 데이터와 브릿지 행 결합
+        bridge_df = pd.DataFrame(bridge_rows)
+        final_df = pd.concat([df_sorted, bridge_df], ignore_index=True)
+
+        # 6. 'segment_group'과 '측정일시'로 다시 정렬
+        # (브릿지 행이 새 세그먼트의 '첫 번째' 행이 되도록)
+        final_df = final_df.sort_values(by=['segment_group', '측정일시'])
+
+        return final_df
+
     # [!!!] 수정 완료 [!!!]
     def create_combined_pf_chart(df, x_axis):
         """실시간 통합 역률 차트를 생성하는 헬퍼 함수"""
@@ -395,36 +518,77 @@ if page == "실시간 전기요금 분석":
             '지상역률_주간클립': '지상역률', '진상역률(%)': '진상역률'
         })
 
-        # 3. 차트 생성
-        base = alt.Chart(pf_long).mark_line().encode(
+        # [!!! 신규 !!!] "중요한" 시간대인지 (True/False) 컬럼 추가
+        # '지상 (주간기준)' 또는 '진상 (야간기준)' 이면 True
+        pf_long['is_important'] = pf_long['표시유형'].isin(['지상 (주간기준)', '진상 (야간기준)'])
+
+        # [!!! NEW !!!] 연속된 세그먼트 그룹핑을 위한 컬럼 추가
+        # 1. 역률종류, 측정일시 순으로 정렬
+        pf_long = pf_long.sort_values(by=['역률종류', '측정일시'])
+        # 2. 'is_important' 값이 변경되는 시점을 감지 (True/False)
+        pf_long['is_important_changed'] = pf_long.groupby('역률종류')['is_important'].diff().ne(0)
+        # 3. 변경되는 시점마다 누적 합계를 구해 고유 그룹 ID 부여
+        pf_long['segment_group'] = pf_long.groupby('역률종류')['is_important_changed'].cumsum()
+
+        # 3. 차트 생성 (역률 종류별로 분리해서 그리기)
+
+        # 3. 차트 생성 (레이어 방식 + 세그먼트 분리)
+        
+        # [레이어 1] - 베이스 (전체 데이터, 얇은 점선)
+        # '역률종류'로만 그룹화하여 끊기지 않는 얇은 점선 배경을 만듭니다.
+        base_dashed_lines = alt.Chart(pf_long).mark_line(
+            point=False, 
+            strokeWidth=1,     # 얇게
+            strokeDash=[4, 4]   # 점선으로
+        ).encode(
             x=x_axis,
-            y=alt.Y('역률값:Q', title="역률 (%)", scale=alt.Scale(domain=[85, 101])), # y축 85~101%로 고정
-            
-            # 색상 매핑 (지상:주황, 진상:파랑)
+            y=alt.Y('역률값:Q', title="역률 (%)", scale=alt.Scale(domain=[85, 101])),
             color=alt.Color('역률종류:N',
                 scale=alt.Scale(domain=['지상역률', '진상역률'], range=['darkorange', 'steelblue']),
                 legend=alt.Legend(title="역률 종류")
             ),
-            
-            # [핵심] 점선/실선 매핑
-            strokeDash=alt.StrokeDash('표시유형:N',
-                scale=alt.Scale(
-                    domain=['지상 (주간기준)', '지상 (야간)', '진상 (야간기준)', '진상 (주간)'],
-                    range=[[1, 0], [5, 5], [1, 0], [5, 5]] # [실선, 점선, 실선, 점선]
-                ),
-                legend=alt.Legend(title="구분 (기준시간대 실선)")
-            ),
+            detail='역률종류:N', # 각 역률별로 1개의 연속된 선
             order=alt.Order('측정일시:T'),
             tooltip=[alt.Tooltip('측정일시'), 
                      '역률종류',
-                     alt.Tooltip('역률값', format=',.2f')]
+                     alt.Tooltip('역률값', format=',.2f'),
+                     '표시유형']
         )
         
-        # 4. 기준선 추가
+        # [레이어 2] - 강조 (중요 데이터, 굵은 실선)
+        # 'is_important == True'인 데이터만 필터링합니다.
+        overlay_solid_lines = alt.Chart(pf_long).mark_line(
+            point=False, 
+            strokeWidth=2.5, # 굵은 실선으로
+            strokeDash=[]
+        ).encode(
+            x=x_axis,
+            y=alt.Y('역률값:Q'),
+            color=alt.Color('역률종류:N',
+                scale=alt.Scale(domain=['지상역률', '진상역률'], range=['darkorange', 'steelblue'])
+            ),
+            
+            # [!!! KEY FIX !!!]
+            # '역률종류'와 'segment_group' 둘 다로 그룹화합니다.
+            # (예: '진상'-1그룹, '진상'-3그룹을 별개의 선으로 인식)
+            detail=alt.Detail(['역률종류:N', 'segment_group:Q']),
+            
+            order=alt.Order('측정일시:T'),
+            tooltip=[alt.Tooltip('측정일시'), 
+                     '역률종류',
+                     alt.Tooltip('역률값', format=',.2f'),
+                     '표시유형']
+        ).transform_filter(
+            alt.datum.is_important == True # '중요한' 세그먼트만 그림
+        )
+
+        # 4. 기준선 추가 (기존과 동일)
         rule90 = alt.Chart(pd.DataFrame({'y': [90]})).mark_rule(color='darkorange', strokeDash=[2,2], opacity=1, strokeWidth=1.5).encode(y='y:Q')
         rule95 = alt.Chart(pd.DataFrame({'y': [95]})).mark_rule(color='steelblue', strokeDash=[2,2], opacity=1, strokeWidth=1.5).encode(y='y:Q')
         
-        return (base + rule90 + rule95).properties().interactive()
+        # [!!!] 5. 차트 합치기 (base + overlay + rules)
+        return (base_dashed_lines + overlay_solid_lines + rule90 + rule95).properties().interactive()
+
     # [!!!] 헬퍼 함수 추가 끝 [!!!]
 
     train_df = load_train_data() # 캐시된 train_df 로드 (PDF 비교용)
@@ -523,6 +687,9 @@ if page == "실시간 전기요금 분석":
                 results_df = pd.concat(st.session_state.predictions)
             
                 if not results_df.empty:
+
+                    results_df = add_work_type_segment_group(results_df)
+
                     first_time = results_df['측정일시'].iloc[0]
                     latest_time = results_df['측정일시'].iloc[-1]
                 
@@ -536,29 +703,31 @@ if page == "실시간 전기요금 분석":
                                         scale=alt.Scale(domain=[start_domain, end_domain])
                                     )
                     
-                    # [!!!] 요청사항 1. 작업유형별 색상 적용 (시뮬레이션 실행 중) [!!!]
+                    # [!!!] 요청사항 1. 작업유형별 "선 색상" 변경 (Pandas 세그먼트) [!!!]
                     color_scale = alt.Scale(domain=['Light_Load', 'Medium_Load', 'Maximum_Load'],
                                             range=['forestgreen', 'gold', 'firebrick'])
                     
                     base = alt.Chart(results_df).encode(x=x_axis)
                     
-                    # 1. 배경에 깔릴 '영역' 차트 (작업유형별로 색상 지정)
-                    area_chart = base.mark_area(opacity=0.3).encode(
+                    # 1. 'segment_group' 컬럼이 이미 results_df에 포함됨 (Altair Transform 삭제)
+
+                    # 2. 최종 라인 차트 생성 (더 간단해짐)
+                    chart = base.mark_line(point=True, size=2, interpolate='monotone').encode(
                         y=alt.Y('예측요금(원):Q', title='예측요금 (원)'),
+                        
+                        # [KEY 1] '작업유형'에 따라 색상 지정
                         color=alt.Color('작업유형:N', scale=color_scale, title="작업 유형"),
+                        
+                        # [KEY 2] '세그먼트 ID'로 선을 분리
+                        detail='segment_group:Q',
+                        
+                        # [KEY 3] '측정일시' 순서대로 점 연결
+                        order=alt.Order('측정일시:T'),
+                        
                         tooltip=['측정일시', 
                                  '작업유형', 
                                  alt.Tooltip('예측요금(원)', format=',.0f')]
-                    )
-                    
-                    # 2. 위에 겹칠 '단일 라인' 차트 (색상 구분 없음)
-                    line_chart = base.mark_line(color='black', point=True, size=1).encode(
-                        y=alt.Y('예측요금(원):Q'),
-                        order=alt.Order('측정일시:T') # [!!!] 라인이 엉키지 않게 순서 지정
-                    )
-                    
-                    # 3. 두 차트 겹치기
-                    chart = (area_chart + line_chart).interactive(bind_y=False) 
+                    ).interactive(bind_y=False) 
                     # [!!!] 수정 완료 [!!!]
                 
                     chart_placeholder.altair_chart(chart, use_container_width=True)
@@ -690,31 +859,39 @@ if page == "실시간 전기요금 분석":
                                     scale=alt.Scale(domain=[start_domain, end_domain])
                                 )
                 
-                # [!!!] 요청사항 1. 작업유형별 색상 적용 (시뮬레이션 중지/완료 시) [!!!]
+                # [!!! NEW !!!] Pandas 헬퍼 함수로 세그먼트 생성
+                results_df = add_work_type_segment_group(results_df) 
+
+                # --- 중지/완료 시 차트 표시 로직 (유지) ---
+                # ... (x_axis 정의) ...
+                
+                # [!!!] 요청사항 1. 작업유형별 "선 색상" 변경 (Pandas 세그먼트) [!!!]
                 color_scale = alt.Scale(domain=['Light_Load', 'Medium_Load', 'Maximum_Load'],
-                                        range=['forestgreen', 'gold', 'firebrick'])
+                                            range=['forestgreen', 'gold', 'firebrick'])
                                         
                 base = alt.Chart(results_df).encode(x=x_axis)
                 
-                # 1. 배경에 깔릴 '영역' 차트 (작업유형별로 색상 지정)
-                area_chart = base.mark_area(opacity=0.3).encode(
+                # 1. 'segment_group' 컬럼이 이미 results_df에 포함됨 (Altair Transform 삭제)
+
+                # 2. 최종 라인 차트 생성 (더 간단해짐)
+                chart = base.mark_line(point=True, size=2, interpolate='monotone').encode(
                     y=alt.Y('예측요금(원):Q', title='예측요금 (원)'),
+                    
+                    # [KEY 1] '작업유형'에 따라 색상 지정
                     color=alt.Color('작업유형:N', scale=color_scale, title="작업 유형"),
+                    
+                    # [KEY 2] '세그먼트 ID'로 선을 분리
+                    detail='segment_group:Q',
+                    
+                    # [KEY 3] '측정일시' 순서대로 점 연결
+                    order=alt.Order('측정일시:T'),
+                    
                     tooltip=['측정일시', 
-                             '작업유형', 
-                             alt.Tooltip('예측요금(원)', format=',.0f')]
-                )
-                
-                # 2. 위에 겹칠 '단일 라인' 차트 (색상 구분 없음)
-                line_chart = base.mark_line(color='black', point=True, size=1).encode(
-                    y=alt.Y('예측요금(원):Q'),
-                    order=alt.Order('측정일시:T') # [!!!] 라인이 엉키지 않게 순서 지정
-                )
-                
-                # 3. 두 차트 겹치기
-                chart = (area_chart + line_chart).interactive(bind_y=False)
+                                 '작업유형', 
+                                 alt.Tooltip('예측요금(원)', format=',.0f')]
+                ).interactive(bind_y=False) 
                 # [!!!] 수정 완료 [!!!]
-                
+            
                 chart_placeholder.altair_chart(chart, use_container_width=True)
 
                 # [!!!] 4. (신규) 이 10줄을 여기에 추가합니다 [!!!]
@@ -925,7 +1102,7 @@ elif page == "과거 전력사용량 분석":
                 x='시간:Q', y='전력사용량(kWh):Q',
                 tooltip=[alt.Tooltip('시간', format='d'), alt.Tooltip('전력사용량(kWh)', format='.2f', title='평균 사용량'), '구분']
             ).transform_filter(alt.datum.구분 == f'{title_for_avg} 평균')
-            return alt.layer(area, line).interactive(bind_y=False)
+            return alt.layer(area, line)
 
         def create_pf_chart(full_df, pf_col_name, time_filter_expr, threshold, color, title_time, start_dt, end_dt):
             pf_data = full_df[full_df.eval(time_filter_expr) & (full_df[pf_col_name] > 0)].copy()
